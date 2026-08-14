@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ChorusAttendanceWeb/ChorusAttendanceWeb.Client/ChorusAttendanceWeb.Client.csproj" />
+  <Project Path="ChorusAttendanceWeb/ChorusAttendanceWeb/ChorusAttendanceWeb.csproj" />
+</Solution>

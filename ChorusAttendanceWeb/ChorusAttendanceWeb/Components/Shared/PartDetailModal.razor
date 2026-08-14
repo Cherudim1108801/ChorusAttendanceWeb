@@ -1,0 +1,36 @@
+@* パートカードをタップしたときに表示する、参加予定メンバー名一覧のモーダル。 *@
+
+@if (Summary is not null)
+{
+    <div class="chorus-modal-scrim" @onclick="Close">
+        <div class="chorus-modal-card" @onclick:stopPropagation="true">
+            <h4 style="color:@Summary.ColorHex">@Summary.Label</h4>
+            <div>@Summary.CountLabel</div>
+            <hr />
+            <div class="chorus-modal-list">
+                @if (Summary.AttendeeNames.Count == 0)
+                {
+                    <div class="chorus-empty-state">参加予定のメンバーはいません。</div>
+                }
+                else
+                {
+                    @foreach (var name in Summary.AttendeeNames)
+                    {
+                        <div>@name</div>
+                    }
+                }
+            </div>
+            <button type="button" class="btn btn-secondary w-100" @onclick="Close">閉じる</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public PartSummary? Summary { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

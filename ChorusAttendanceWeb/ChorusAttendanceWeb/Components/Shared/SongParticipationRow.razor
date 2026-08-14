@@ -1,0 +1,16 @@
+@* 曲ごとの参加者内訳（パート色の○、上/下分割ラベル）を表示する。 *@
+
+<div class="mb-3">
+    <div class="fw-bold">@Song.Title</div>
+    <div class="chorus-song-dots">
+        @foreach (var dot in Song.Dots)
+        {
+            <span class="chorus-dot @(dot.IsGroupStart ? "group-start" : "")" style="background-color:@dot.ColorHex">@dot.SubLabel</span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SongParticipation Song { get; set; }
+}

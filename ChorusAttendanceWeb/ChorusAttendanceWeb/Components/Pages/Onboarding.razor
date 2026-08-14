@@ -1,0 +1,79 @@
+@page "/onboarding"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MemberService MemberService
+@inject NavigationManager NavigationManager
+
+<PageTitle>ようこそ</PageTitle>
+
+<div class="chorus-page" style="max-width:480px;">
+    <h1>ようこそ</h1>
+    <p class="chorus-hint">出席管理アプリを使うために、表示名とパートを登録してください。</p>
+
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
+
+    <div class="mb-3">
+        <label class="form-label">名前</label>
+        <input class="form-control" placeholder="例：山田 太郎" @bind="name" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">パート</label>
+        <select class="form-select" @bind="selectedPart">
+            @foreach (var part in PartTypeExtensions.All)
+            {
+                <option value="@part">@part.ToDisplayName()</option>
+            }
+        </select>
+    </div>
+
+    <button class="btn btn-primary w-100" disabled="@isBusy" @onclick="SaveAsync">登録して始める</button>
+</div>
+
+@code {
+    private string name = string.Empty;
+    private PartType selectedPart = PartType.Soprano;
+    private string? errorMessage;
+    private bool isBusy;
+
+    private async Task SaveAsync()
+    {
+        var trimmed = name.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            errorMessage = "名前を入力してください。";
+            return;
+        }
+
+        isBusy = true;
+        errorMessage = null;
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = await UserManager.GetUserAsync(authState.User);
+            if (user is null)
+            {
+                errorMessage = "ユーザー情報を取得できませんでした。";
+                return;
+            }
+
+            await MemberService.SaveProfileAsync(user, trimmed, selectedPart);
+            NavigationManager.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存に失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+}

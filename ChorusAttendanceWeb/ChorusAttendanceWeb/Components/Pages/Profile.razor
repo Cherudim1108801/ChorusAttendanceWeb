@@ -1,0 +1,185 @@
+@page "/profile"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject MemberService MemberService
+@inject PieceService PieceService
+
+<PageTitle>プロフィール</PageTitle>
+
+<div class="chorus-page" style="max-width:480px;">
+    <h1>プロフィール</h1>
+
+    @if (isLoading)
+    {
+        <p class="chorus-hint">読み込み中...</p>
+    }
+    else
+    {
+        @if (errorMessage is not null)
+        {
+            <div class="chorus-error">@errorMessage</div>
+        }
+        @if (savedMessage is not null)
+        {
+            <div class="chorus-success">@savedMessage</div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">名前</label>
+            <input class="form-control" placeholder="例：山田 太郎" @bind="name" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">パート</label>
+            <select class="form-select" @bind="selectedPart" @bind:after="BuildPiecePartInputs">
+                @foreach (var part in PartTypeExtensions.All)
+                {
+                    <option value="@part">@part.ToDisplayName()</option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">曲ごとのパート担当</label>
+            <div class="chorus-hint mb-2">所属パートに内部分割（上・下など）が設定されている曲のみ表示されます。</div>
+            @if (piecePartInputs.Count == 0)
+            {
+                <div class="chorus-hint">該当する曲はありません。</div>
+            }
+            else
+            {
+                @foreach (var input in piecePartInputs)
+                {
+                    <div class="mb-2">
+                        <label class="form-label">@input.PieceTitle</label>
+                        <select class="form-select" @bind="input.SelectedSubPart">
+                            <option value="">(未選択)</option>
+                            @foreach (var option in input.SubPartOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </select>
+                    </div>
+                }
+            }
+        </div>
+
+        <button class="btn btn-primary" disabled="@isBusy" @onclick="SaveAsync">保存</button>
+
+        <hr class="my-4" />
+        <div class="chorus-hint">別のアカウントに切り替える場合は、右上のメニューからログアウトしてください。</div>
+    }
+</div>
+
+@code {
+    private ApplicationUser? currentUser;
+    private List<Data.Piece> pieces = [];
+    private List<PiecePartSelectionInput> piecePartInputs = [];
+    private string name = string.Empty;
+    private PartType selectedPart = PartType.Soprano;
+    private string? errorMessage;
+    private string? savedMessage;
+    private bool isLoading = true;
+    private bool isBusy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        currentUser = await UserManager.GetUserAsync(authState.User);
+
+        isLoading = true;
+        try
+        {
+            if (currentUser is not null)
+            {
+                name = currentUser.DisplayName ?? string.Empty;
+                selectedPart = currentUser.Part ?? PartType.Soprano;
+            }
+
+            pieces = await PieceService.GetAllAsync();
+            await BuildPiecePartInputsAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void BuildPiecePartInputs() => _ = BuildPiecePartInputsAsync();
+
+    private async Task BuildPiecePartInputsAsync()
+    {
+        var saved = currentUser is null
+            ? []
+            : (await MemberService.GetPiecePartsAsync(currentUser.Id)).ToDictionary(p => p.PieceId, p => p.SubPart);
+
+        piecePartInputs = [];
+        foreach (var piece in pieces)
+        {
+            var assignment = piece.PartAssignments.FirstOrDefault(a => a.Part == selectedPart);
+            if (assignment is null || assignment.Division == PartDivision.None)
+                continue;
+
+            piecePartInputs.Add(new PiecePartSelectionInput
+            {
+                PieceId = piece.Id,
+                PieceTitle = piece.Title,
+                SubPartOptions = [.. assignment.SubPartLabels],
+                SelectedSubPart = saved.GetValueOrDefault(piece.Id)
+            });
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var trimmed = name.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            errorMessage = "名前を入力してください。";
+            return;
+        }
+
+        if (currentUser is null)
+            return;
+
+        isBusy = true;
+        errorMessage = null;
+        savedMessage = null;
+        try
+        {
+            await MemberService.SaveProfileAsync(currentUser, trimmed, selectedPart);
+
+            var pieceParts = piecePartInputs
+                .Where(p => !string.IsNullOrEmpty(p.SelectedSubPart))
+                .Select(p => (p.PieceId, p.SelectedSubPart!))
+                .ToList();
+            await MemberService.SavePiecePartsAsync(currentUser.Id, pieceParts);
+
+            savedMessage = "保存しました。";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"保存に失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private sealed class PiecePartSelectionInput
+    {
+        public required Guid PieceId { get; init; }
+        public required string PieceTitle { get; init; }
+        public required List<string> SubPartOptions { get; init; }
+        public string? SelectedSubPart { get; set; }
+    }
+}

@@ -1,0 +1,120 @@
+@page "/"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject PracticeService PracticeService
+@inject AttendanceService AttendanceService
+@inject AttendanceSummaryService AttendanceSummaryService
+@inject NavigationManager NavigationManager
+
+<PageTitle>ホーム</PageTitle>
+
+<div class="chorus-page">
+    <h1>こんにちは、@(currentUser?.DisplayName) さん</h1>
+
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="chorus-hint">読み込み中...</p>
+    }
+    else if (nextPractice is null)
+    {
+        <div class="chorus-card-highlight">
+            <div class="fw-bold mb-2">次回の練習予定が登録されていません</div>
+            <button class="btn btn-primary" @onclick="GoToSchedule">予定を登録する</button>
+        </div>
+    }
+    else
+    {
+        <div class="chorus-card-highlight">
+            <div class="chorus-hint">次回の練習</div>
+            <div class="fs-4 fw-bold">@nextPractice.Date.ToString("yyyy年M月d日(ddd)", System.Globalization.CultureInfo.GetCultureInfo("ja-JP"))</div>
+            @if (!string.IsNullOrEmpty(nextPractice.Title))
+            {
+                <div>@nextPractice.Title</div>
+            }
+            @if (!string.IsNullOrEmpty(nextPractice.Place))
+            {
+                <div class="chorus-hint">📍 @nextPractice.Place</div>
+            }
+        </div>
+
+        <h2 class="h5">パート別 参加予定人数</h2>
+        <div class="chorus-hint">カードをタップすると参加者の名前を確認できます</div>
+        <PartSummaryGrid Summaries="summary!.PartSummaries" OnSelect="ShowPartDetail" />
+        <div class="fw-bold">合計 参加予定: @summary.TotalAttending 人</div>
+        <div class="chorus-hint mb-3">回答済み: @summary.TotalResponded 人 (登録メンバー全 @summary.TotalMembers 人)</div>
+
+        <h2 class="h5">あなたの出欠</h2>
+        <AttendanceStatusSelector Status="summary.MyStatus" StatusChanged="SetMyStatusAsync" />
+
+        <PartDetailModal Summary="selectedPartSummary" OnClose="ClosePartModal" />
+    }
+</div>
+
+@code {
+    private ApplicationUser? currentUser;
+    private Data.Practice? nextPractice;
+    private PracticeAttendanceSummary? summary;
+    private PartSummary? selectedPartSummary;
+    private string? errorMessage;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        currentUser = await UserManager.GetUserAsync(authState.User);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            nextPractice = await PracticeService.GetNextUpcomingAsync();
+            if (nextPractice is not null && currentUser is not null)
+            {
+                summary = await AttendanceSummaryService.BuildAsync(nextPractice, currentUser.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SetMyStatusAsync(AttendanceStatus status)
+    {
+        if (nextPractice is null || currentUser is null)
+            return;
+
+        try
+        {
+            await AttendanceService.SetStatusAsync(nextPractice.Id, currentUser.Id, status);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+
+    private void GoToSchedule() => NavigationManager.NavigateTo("/schedule");
+
+    private void ShowPartDetail(PartSummary summary) => selectedPartSummary = summary;
+
+    private void ClosePartModal() => selectedPartSummary = null;
+}

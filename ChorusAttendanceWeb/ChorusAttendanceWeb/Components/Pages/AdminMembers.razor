@@ -1,0 +1,113 @@
+@page "/admin/members"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Identity
+
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>メンバー管理</PageTitle>
+
+<div class="chorus-page">
+    <h1>メンバー管理</h1>
+    <p class="chorus-hint">管理者ロールを持つメンバーは、練習予定・曲の追加/削除ができます。</p>
+
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="chorus-hint">読み込み中...</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>名前</th>
+                    <th>メールアドレス</th>
+                    <th>パート</th>
+                    <th>管理者</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr>
+                        <td>@(row.User.DisplayName ?? "(未設定)")</td>
+                        <td>@row.User.Email</td>
+                        <td>@(row.User.Part?.ToDisplayName() ?? "-")</td>
+                        <td>
+                            <div class="form-check form-switch">
+                                <input type="checkbox" class="form-check-input" checked="@row.IsAdmin"
+                                       disabled="@(row.User.Id == currentUserId)"
+                                       @onchange="e => ToggleAdminAsync(row, (bool)e.Value!)" />
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<MemberRow> rows = [];
+    private string? currentUserId;
+    private string? errorMessage;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        currentUserId = UserManager.GetUserId(authState.User);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            var users = UserManager.Users.OrderBy(u => u.DisplayName).ThenBy(u => u.Email).ToList();
+            var list = new List<MemberRow>();
+            foreach (var user in users)
+            {
+                var isAdmin = await UserManager.IsInRoleAsync(user, "Admin");
+                list.Add(new MemberRow(user, isAdmin));
+            }
+            rows = list;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ToggleAdminAsync(MemberRow row, bool isAdmin)
+    {
+        errorMessage = null;
+        try
+        {
+            if (isAdmin)
+                await UserManager.AddToRoleAsync(row.User, "Admin");
+            else
+                await UserManager.RemoveFromRoleAsync(row.User, "Admin");
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+
+    private sealed record MemberRow(ApplicationUser User, bool IsAdmin);
+}

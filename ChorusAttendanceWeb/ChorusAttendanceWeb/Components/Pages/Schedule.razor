@@ -1,0 +1,176 @@
+@page "/schedule"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@inject PracticeService PracticeService
+@inject PieceService PieceService
+@inject NavigationManager NavigationManager
+
+<PageTitle>予定</PageTitle>
+
+<div class="chorus-page">
+    <h1>練習予定</h1>
+
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <button class="btn btn-outline-primary mb-3" @onclick="() => isAddPanelVisible = !isAddPanelVisible">
+                ＋ 練習予定を追加
+            </button>
+
+            @if (isAddPanelVisible)
+            {
+                <div class="chorus-card-highlight">
+                    <div class="mb-2">
+                        <label class="form-label">日付</label>
+                        <input type="date" class="form-control" @bind="newDate" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">タイトル（任意）</label>
+                        <input class="form-control" placeholder="例：定期練習" @bind="newTitle" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">場所（任意）</label>
+                        <input class="form-control" placeholder="例：市民会館 音楽室" @bind="newPlace" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">練習する曲（任意）</label>
+                        @if (pieces.Count == 0)
+                        {
+                            <div class="chorus-hint">登録されている曲はありません。「曲」タブから登録できます。</div>
+                        }
+                        else
+                        {
+                            <div class="chorus-checklist">
+                                @foreach (var piece in pieces)
+                                {
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="piece-@piece.Id"
+                                               checked="@selectedPieceIds.Contains(piece.Id)"
+                                               @onchange="e => ToggleSelectedPiece(piece.Id, (bool)e.Value!)" />
+                                        <label class="form-check-label" for="piece-@piece.Id">@piece.Title</label>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <button class="btn btn-primary" @onclick="AddPracticeAsync">この内容で登録</button>
+                </div>
+            }
+        </Authorized>
+    </AuthorizeView>
+
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="chorus-hint">読み込み中...</p>
+    }
+    else if (practices.Count == 0)
+    {
+        <div class="chorus-empty-state">登録されている練習予定はありません。</div>
+    }
+    else
+    {
+        @foreach (var practice in practices)
+        {
+            <div class="chorus-card" style="cursor:pointer" @onclick="() => OpenDetail(practice)">
+                <AuthorizeView Roles="Admin" Context="deleteContext">
+                    <Authorized>
+                        <button type="button" class="chorus-card-delete" @onclick="() => DeletePracticeAsync(practice)" @onclick:stopPropagation="true">削除</button>
+                    </Authorized>
+                </AuthorizeView>
+                <div class="fs-5 fw-bold">@practice.Date.ToString("yyyy年M月d日(ddd)", System.Globalization.CultureInfo.GetCultureInfo("ja-JP"))</div>
+                @if (!string.IsNullOrEmpty(practice.Title))
+                {
+                    <div>@practice.Title</div>
+                }
+                @if (!string.IsNullOrEmpty(practice.Place))
+                {
+                    <div class="chorus-hint">📍 @practice.Place</div>
+                }
+                @if (!string.IsNullOrEmpty(practice.PiecesSummary))
+                {
+                    <div class="chorus-hint">🎵 @practice.PiecesSummary</div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Data.Practice> practices = [];
+    private List<Data.Piece> pieces = [];
+    private HashSet<Guid> selectedPieceIds = [];
+    private bool isAddPanelVisible;
+    private DateOnly newDate = DateOnly.FromDateTime(DateTime.Today.AddDays(7));
+    private string newTitle = string.Empty;
+    private string newPlace = string.Empty;
+    private string? errorMessage;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            practices = await PracticeService.GetAllAsync();
+            pieces = await PieceService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ToggleSelectedPiece(Guid pieceId, bool isSelected)
+    {
+        if (isSelected)
+            selectedPieceIds.Add(pieceId);
+        else
+            selectedPieceIds.Remove(pieceId);
+    }
+
+    private async Task AddPracticeAsync()
+    {
+        errorMessage = null;
+        try
+        {
+            await PracticeService.CreateAsync(newDate, newTitle.Trim(), newPlace.Trim(), selectedPieceIds.ToList());
+            newTitle = string.Empty;
+            newPlace = string.Empty;
+            newDate = DateOnly.FromDateTime(DateTime.Today.AddDays(7));
+            selectedPieceIds.Clear();
+            isAddPanelVisible = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"予定の追加に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task DeletePracticeAsync(Data.Practice practice)
+    {
+        try
+        {
+            await PracticeService.DeleteAsync(practice.Id);
+            practices.Remove(practice);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"削除に失敗しました。({ex.Message})";
+        }
+    }
+
+    private void OpenDetail(Data.Practice practice) => NavigationManager.NavigateTo($"/schedule/{practice.Id}");
+}

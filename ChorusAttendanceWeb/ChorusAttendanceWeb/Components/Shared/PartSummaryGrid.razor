@@ -1,0 +1,20 @@
+@* パート別（ソプラノ/アルト/テナー/ベース）参加予定人数のカードグリッド。タップで詳細モーダルを開くコールバックを呼ぶ。 *@
+
+<div class="chorus-part-grid">
+    @foreach (var summary in Summaries)
+    {
+        <button type="button" class="chorus-part-card" style="background-color:@summary.CardBackgroundColorHex" @onclick="() => OnSelect.InvokeAsync(summary)">
+            <div class="label">@summary.Label</div>
+            <div class="count">@summary.AttendingCount</div>
+            <div class="sub">@summary.CountLabel</div>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<PartSummary> Summaries { get; set; }
+
+    [Parameter]
+    public EventCallback<PartSummary> OnSelect { get; set; }
+}

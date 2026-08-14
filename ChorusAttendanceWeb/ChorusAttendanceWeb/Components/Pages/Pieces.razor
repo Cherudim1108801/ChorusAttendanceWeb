@@ -1,0 +1,163 @@
+@page "/pieces"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@inject PieceService PieceService
+
+<PageTitle>曲</PageTitle>
+
+<div class="chorus-page">
+    <h1>曲（レパートリー）</h1>
+
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <button class="btn btn-outline-primary mb-3" @onclick="() => isAddPanelVisible = !isAddPanelVisible">
+                ＋ 曲を追加
+            </button>
+
+            @if (isAddPanelVisible)
+            {
+                <div class="chorus-card-highlight">
+                    <div class="mb-2">
+                        <label class="form-label">曲名</label>
+                        <input class="form-control" placeholder="例：ふるさと" @bind="newTitle" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">使用パート</label>
+                        <div class="chorus-hint mb-2">パートごとに使用の有無と、必要であれば内部分割方式を選べます。</div>
+                        @foreach (var input in partInputs)
+                        {
+                            <div class="chorus-part-input-row">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="part-@input.Part"
+                                           checked="@input.IsSelected"
+                                           @onchange="e => input.IsSelected = (bool)e.Value!" />
+                                    <label class="form-check-label" for="part-@input.Part">@input.Part.ToDisplayName()</label>
+                                </div>
+                                <select class="form-select form-select-sm" disabled="@(!input.IsSelected)" @bind="input.Division">
+                                    @foreach (var division in PartDivisionExtensions.All)
+                                    {
+                                        <option value="@division">@division.ToDisplayName()</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                    </div>
+                    <button class="btn btn-primary" @onclick="AddPieceAsync">この内容で登録</button>
+                </div>
+            }
+        </Authorized>
+    </AuthorizeView>
+
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="chorus-hint">読み込み中...</p>
+    }
+    else if (pieces.Count == 0)
+    {
+        <div class="chorus-empty-state">登録されている曲はありません。</div>
+    }
+    else
+    {
+        @foreach (var piece in pieces)
+        {
+            <div class="chorus-card">
+                <AuthorizeView Roles="Admin">
+                    <Authorized>
+                        <button type="button" class="chorus-card-delete" @onclick="() => DeletePieceAsync(piece)">削除</button>
+                    </Authorized>
+                </AuthorizeView>
+                <div class="fs-5 fw-bold">@piece.Title</div>
+                <div class="chorus-hint">@piece.PartsSummary</div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Data.Piece> pieces = [];
+    private List<PartAssignmentInput> partInputs = [.. PartTypeExtensions.All.Select(p => new PartAssignmentInput(p))];
+    private bool isAddPanelVisible;
+    private string newTitle = string.Empty;
+    private string? errorMessage;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            pieces = await PieceService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddPieceAsync()
+    {
+        var trimmedTitle = newTitle.Trim();
+        if (string.IsNullOrEmpty(trimmedTitle))
+        {
+            errorMessage = "曲名を入力してください。";
+            return;
+        }
+
+        errorMessage = null;
+        try
+        {
+            var assignments = partInputs
+                .Where(p => p.IsSelected)
+                .Select(p => (p.Part, p.Division))
+                .ToList();
+
+            await PieceService.CreateAsync(trimmedTitle, assignments);
+
+            newTitle = string.Empty;
+            foreach (var input in partInputs)
+            {
+                input.IsSelected = false;
+                input.Division = PartDivision.None;
+            }
+            isAddPanelVisible = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"曲の追加に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task DeletePieceAsync(Data.Piece piece)
+    {
+        try
+        {
+            await PieceService.DeleteAsync(piece.Id);
+            pieces.Remove(piece);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"削除に失敗しました。({ex.Message})";
+        }
+    }
+
+    private sealed class PartAssignmentInput(PartType part)
+    {
+        public PartType Part { get; } = part;
+        public bool IsSelected { get; set; }
+        public PartDivision Division { get; set; } = PartDivision.None;
+    }
+}

@@ -1,0 +1,53 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.EntityFrameworkCore
+
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var principal = authState.User;
+        if (principal.Identity?.IsAuthenticated != true)
+            return;
+
+        var path = new Uri(NavigationManager.Uri).AbsolutePath;
+        if (path.StartsWith("/onboarding", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("/Account", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var userId = principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (userId is null)
+            return;
+
+        // ページ本体と並行してDBアクセスが起きても衝突しないよう、専用のDbContextインスタンスを使う。
+        await using var db = await DbContextFactory.CreateDbContextAsync();
+        var isProfileComplete = await db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.DisplayName != null && u.Part != null)
+            .FirstOrDefaultAsync();
+
+        if (!isProfileComplete)
+            NavigationManager.NavigateTo("/onboarding");
+    }
+}
