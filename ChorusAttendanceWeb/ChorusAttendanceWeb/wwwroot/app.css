@@ -270,3 +270,55 @@ h1:focus {
     flex: 1;
     max-width: 220px;
 }
+
+.chorus-recording-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.chorus-recording-link {
+    color: var(--chorus-primary);
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.chorus-recording-link:hover {
+    text-decoration: underline;
+}
+
+.chorus-featured-star {
+    color: #F5A623;
+    font-size: 0.9rem;
+}
+
+.chorus-key-status {
+    font-weight: 700;
+}
+
+.chorus-key-status.picked-up {
+    color: var(--chorus-tenor);
+}
+
+.chorus-key-status.not-picked-up {
+    color: var(--chorus-accent);
+}
+
+.chorus-recording-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.6rem;
+    text-decoration: none;
+    color: var(--chorus-gray-900);
+}
+
+.chorus-recording-card.highlighted {
+    background: #FFF6E0;
+}

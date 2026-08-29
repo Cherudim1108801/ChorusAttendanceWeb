@@ -100,7 +100,9 @@ public class AttendanceSummaryService(ApplicationDbContext db, MemberService mem
             {
                 PieceId = piece.Id,
                 Title = piece.Title,
-                Dots = dots
+                Dots = dots,
+                RecordingUrl = practicePiece.RecordingUrl,
+                IsFeatured = practicePiece.IsFeatured
             });
         }
 

@@ -46,7 +46,11 @@
         <div class="fw-bold mt-2">参加予定: @summary!.TotalAttending / @summary.TotalMembers 人</div>
 
         <h2 class="h5 mt-3">あなたの出欠</h2>
-        <AttendanceStatusSelector Status="summary.MyStatus" StatusChanged="SetMyStatusAsync" />
+        @if (!isAttendanceEditable)
+        {
+            <div class="chorus-hint">過去の練習のため、出欠は変更できません。</div>
+        }
+        <AttendanceStatusSelector Status="summary.MyStatus" StatusChanged="SetMyStatusAsync" Disabled="!isAttendanceEditable" />
 
         <h2 class="h5 mt-3">パート別 参加人数</h2>
         <div class="chorus-hint">カードをタップすると参加者の名前を確認できます</div>
@@ -56,11 +60,45 @@
         {
             <h2 class="h5 mt-3">曲ごとの参加人数</h2>
             <div class="chorus-hint mb-2">○の色はパート、「上」「下」は曲内の分割担当を表します</div>
-            @foreach (var song in summary.SongParticipations)
-            {
-                <SongParticipationRow Song="song" />
-            }
+            <AuthorizeView Roles="Admin" Context="songAdminContext">
+                <Authorized>
+                    @foreach (var song in summary.SongParticipations)
+                    {
+                        <SongParticipationRow Song="song" IsAdmin="true" OnEditRecording="SaveRecordingUrlAsync" OnToggleFeatured="ToggleRecordingFeaturedAsync" />
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    @foreach (var song in summary.SongParticipations)
+                    {
+                        <SongParticipationRow Song="song" IsAdmin="false" />
+                    }
+                </NotAuthorized>
+            </AuthorizeView>
         }
+
+        <AuthorizeView Roles="Admin" Context="keyAdminContext">
+            <Authorized>
+                <h2 class="h5 mt-3">鍵の受け取り状況</h2>
+                @if (!practice.RequiresKeyPickup)
+                {
+                    <div class="chorus-hint">この練習では鍵の受け取りは不要です。</div>
+                }
+                else if (practice.KeyPickedUp)
+                {
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="chorus-key-status picked-up">受け取り済み</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleKeyPickedUpAsync(false)">未受け取りに戻す</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="chorus-key-status not-picked-up">未受け取り</span>
+                        <button type="button" class="btn btn-sm btn-primary" @onclick="() => ToggleKeyPickedUpAsync(true)">受け取り済みにする</button>
+                    </div>
+                }
+            </Authorized>
+        </AuthorizeView>
 
         <PartDetailModal Summary="selectedPartSummary" OnClose="ClosePartModal" />
     }
@@ -76,6 +114,7 @@
     private PartSummary? selectedPartSummary;
     private string? errorMessage;
     private bool isLoading = true;
+    private bool isAttendanceEditable = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -92,9 +131,13 @@
         try
         {
             practice = await PracticeService.GetByIdAsync(PracticeId);
-            if (practice is not null && currentUser is not null)
+            if (practice is not null)
             {
-                summary = await AttendanceSummaryService.BuildAsync(practice, currentUser.Id);
+                isAttendanceEditable = practice.Date >= DateOnly.FromDateTime(DateTime.Today);
+                if (currentUser is not null)
+                {
+                    summary = await AttendanceSummaryService.BuildAsync(practice, currentUser.Id);
+                }
             }
         }
         catch (Exception ex)
@@ -109,7 +152,7 @@
 
     private async Task SetMyStatusAsync(AttendanceStatus status)
     {
-        if (practice is null || currentUser is null)
+        if (practice is null || currentUser is null || !isAttendanceEditable)
             return;
 
         try
@@ -126,4 +169,56 @@
     private void ShowPartDetail(PartSummary summary) => selectedPartSummary = summary;
 
     private void ClosePartModal() => selectedPartSummary = null;
+
+    private async Task SaveRecordingUrlAsync((Guid PieceId, string? RecordingUrl) input)
+    {
+        if (practice is null)
+            return;
+
+        try
+        {
+            await PracticeService.SetPieceRecordingUrlAsync(practice.Id, input.PieceId, input.RecordingUrl);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"録音リンクの保存に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task ToggleRecordingFeaturedAsync(Guid pieceId)
+    {
+        if (practice is null)
+            return;
+
+        var song = summary?.SongParticipations.FirstOrDefault(s => s.PieceId == pieceId);
+        if (song is null)
+            return;
+
+        try
+        {
+            await PracticeService.SetPieceRecordingFeaturedAsync(practice.Id, pieceId, !song.IsFeatured);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
+
+    private async Task ToggleKeyPickedUpAsync(bool keyPickedUp)
+    {
+        if (practice is null)
+            return;
+
+        try
+        {
+            await PracticeService.SetKeyPickedUpAsync(practice.Id, keyPickedUp);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"更新に失敗しました。({ex.Message})";
+        }
+    }
 }

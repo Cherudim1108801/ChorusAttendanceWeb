@@ -1,0 +1,93 @@
+@page "/history"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@inject PracticeService PracticeService
+@inject NavigationManager NavigationManager
+
+<PageTitle>履歴</PageTitle>
+
+<div class="chorus-page">
+    <h1>過去の練習</h1>
+
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="chorus-hint">読み込み中...</p>
+    }
+    else if (practices.Count == 0)
+    {
+        <div class="chorus-empty-state">過去の練習データはありません。</div>
+    }
+    else
+    {
+        @foreach (var practice in practices)
+        {
+            <div class="chorus-card" style="cursor:pointer" @onclick="() => OpenDetail(practice)">
+                <AuthorizeView Roles="Admin" Context="deleteContext">
+                    <Authorized>
+                        <button type="button" class="chorus-card-delete" @onclick="() => DeletePracticeAsync(practice)" @onclick:stopPropagation="true">削除</button>
+                    </Authorized>
+                </AuthorizeView>
+                <div class="fs-5 fw-bold">@practice.Date.ToString("yyyy年M月d日(ddd)", System.Globalization.CultureInfo.GetCultureInfo("ja-JP"))</div>
+                @if (!string.IsNullOrEmpty(practice.Title))
+                {
+                    <div>@practice.Title</div>
+                }
+                @if (!string.IsNullOrEmpty(practice.Place))
+                {
+                    <div class="chorus-hint">📍 @practice.Place</div>
+                }
+                @if (!string.IsNullOrEmpty(practice.PiecesSummary))
+                {
+                    <div class="chorus-hint">🎵 @practice.PiecesSummary</div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<Data.Practice> practices = [];
+    private string? errorMessage;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            practices = await PracticeService.GetPastAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task DeletePracticeAsync(Data.Practice practice)
+    {
+        try
+        {
+            await PracticeService.DeleteAsync(practice.Id);
+            practices.Remove(practice);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"削除に失敗しました。({ex.Message})";
+        }
+    }
+
+    private void OpenDetail(Data.Practice practice) => NavigationManager.NavigateTo($"/schedule/{practice.Id}");
+}

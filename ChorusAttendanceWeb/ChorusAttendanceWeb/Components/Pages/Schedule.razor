@@ -53,6 +53,10 @@
                             </div>
                         }
                     </div>
+                    <div class="form-check mb-2">
+                        <input type="checkbox" class="form-check-input" id="requires-key-pickup" @bind="newRequiresKeyPickup" />
+                        <label class="form-check-label" for="requires-key-pickup">鍵の受け取りが必要</label>
+                    </div>
                     <button class="btn btn-primary" @onclick="AddPracticeAsync">この内容で登録</button>
                 </div>
             }
@@ -108,6 +112,7 @@
     private DateOnly newDate = DateOnly.FromDateTime(DateTime.Today.AddDays(7));
     private string newTitle = string.Empty;
     private string newPlace = string.Empty;
+    private bool newRequiresKeyPickup;
     private string? errorMessage;
     private bool isLoading = true;
 
@@ -119,7 +124,7 @@
         errorMessage = null;
         try
         {
-            practices = await PracticeService.GetAllAsync();
+            practices = await PracticeService.GetUpcomingAsync();
             pieces = await PieceService.GetAllAsync();
         }
         catch (Exception ex)
@@ -145,10 +150,11 @@
         errorMessage = null;
         try
         {
-            await PracticeService.CreateAsync(newDate, newTitle.Trim(), newPlace.Trim(), selectedPieceIds.ToList());
+            await PracticeService.CreateAsync(newDate, newTitle.Trim(), newPlace.Trim(), selectedPieceIds.ToList(), newRequiresKeyPickup);
             newTitle = string.Empty;
             newPlace = string.Empty;
             newDate = DateOnly.FromDateTime(DateTime.Today.AddDays(7));
+            newRequiresKeyPickup = false;
             selectedPieceIds.Clear();
             isAddPanelVisible = false;
             await LoadAsync();

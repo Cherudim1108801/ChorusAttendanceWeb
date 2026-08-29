@@ -1,0 +1,20 @@
+@* 「音源」タブに表示する録音1件分のカード。 *@
+
+<a href="@Item.RecordingUrl" target="_blank" rel="noopener noreferrer" class="chorus-recording-card @(Highlighted ? "highlighted" : "")">
+    @if (Item.IsFeatured)
+    {
+        <span class="chorus-featured-star">★</span>
+    }
+    <div>
+        <div class="fw-bold">@Item.Title</div>
+        <div class="chorus-hint">@Item.PracticeLabel</div>
+    </div>
+</a>
+
+@code {
+    [Parameter, EditorRequired]
+    public required RecordingItem Item { get; set; }
+
+    [Parameter]
+    public bool Highlighted { get; set; }
+}

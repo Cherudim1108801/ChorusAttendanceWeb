@@ -1,0 +1,67 @@
+@page "/recordings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@inject PracticeService PracticeService
+
+<PageTitle>音源</PageTitle>
+
+<div class="chorus-page">
+    <h1>音源</h1>
+
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="chorus-hint">読み込み中...</p>
+    }
+    else if (recordings.Count == 0)
+    {
+        <div class="chorus-empty-state">録音データはまだありません。練習詳細画面から曲ごとに録音リンクを登録できます。</div>
+    }
+    else
+    {
+        var featured = recordings.Where(r => r.IsFeatured).ToList();
+        if (featured.Count > 0)
+        {
+            <h2 class="h5">★ 注目の音源</h2>
+            @foreach (var item in featured)
+            {
+                <RecordingCard Item="item" Highlighted="true" />
+            }
+        }
+
+        <h2 class="h5 mt-3">すべての録音</h2>
+        @foreach (var item in recordings)
+        {
+            <RecordingCard Item="item" Highlighted="false" />
+        }
+    }
+</div>
+
+@code {
+    private List<RecordingItem> recordings = [];
+    private string? errorMessage;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            recordings = await PracticeService.GetRecordingItemsAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"読み込みに失敗しました。({ex.Message})";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

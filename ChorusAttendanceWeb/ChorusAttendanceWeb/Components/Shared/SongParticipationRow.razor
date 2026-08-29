@@ -1,16 +1,103 @@
-@* 曲ごとの参加者内訳（パート色の○、上/下分割ラベル）を表示する。 *@
+@* 曲ごとの参加者内訳（パート色の○、上/下分割ラベル）と録音リンクを表示する。 *@
 
 <div class="mb-3">
-    <div class="fw-bold">@Song.Title</div>
+    <div class="d-flex align-items-center gap-1">
+        @if (Song.IsFeatured)
+        {
+            <span class="chorus-featured-star" title="注目の音源">★</span>
+        }
+        <span class="fw-bold">@Song.Title</span>
+    </div>
     <div class="chorus-song-dots">
         @foreach (var dot in Song.Dots)
         {
             <span class="chorus-dot @(dot.IsGroupStart ? "group-start" : "")" style="background-color:@dot.ColorHex">@dot.SubLabel</span>
         }
     </div>
+
+    <div class="chorus-recording-row">
+        @if (isEditing)
+        {
+            <input class="form-control form-control-sm" style="max-width:320px" placeholder="OneDriveの共有リンク" @bind="editUrl" @bind:event="oninput" />
+            <button type="button" class="btn btn-sm btn-primary" @onclick="SaveAsync">保存</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelEdit">キャンセル</button>
+        }
+        else
+        {
+            @if (Song.HasRecordingUrl)
+            {
+                <a href="@Song.RecordingUrl" target="_blank" rel="noopener noreferrer" class="chorus-recording-link">🎵 録音を聴く</a>
+            }
+            else
+            {
+                <span class="chorus-hint">録音リンク未登録</span>
+            }
+
+            @if (IsAdmin)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="StartEdit">編集</button>
+                @if (Song.CanToggleFeaturedOn)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ToggleFeaturedAsync">★ 注目に設定</button>
+                }
+                else if (Song.CanToggleFeaturedOff)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ToggleFeaturedAsync">★ 注目解除</button>
+                }
+            }
+        }
+    </div>
+    @if (errorMessage is not null)
+    {
+        <div class="chorus-error">@errorMessage</div>
+    }
 </div>
 
 @code {
     [Parameter, EditorRequired]
     public required SongParticipation Song { get; set; }
+
+    [Parameter]
+    public bool IsAdmin { get; set; }
+
+    /// <summary>録音リンクの保存が要求されたときに発火する。空文字列はリンク削除を意味する。</summary>
+    [Parameter]
+    public EventCallback<(Guid PieceId, string? RecordingUrl)> OnEditRecording { get; set; }
+
+    /// <summary>強調表示（ピン留め）の切り替えが要求されたときに発火する。</summary>
+    [Parameter]
+    public EventCallback<Guid> OnToggleFeatured { get; set; }
+
+    private bool isEditing;
+    private string editUrl = string.Empty;
+    private string? errorMessage;
+
+    private void StartEdit()
+    {
+        editUrl = Song.RecordingUrl ?? string.Empty;
+        errorMessage = null;
+        isEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        isEditing = false;
+        errorMessage = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        var trimmed = editUrl.Trim();
+        if (trimmed.Length > 0 && !Uri.TryCreate(trimmed, UriKind.Absolute, out _))
+        {
+            errorMessage = "リンクの形式が正しくありません。";
+            return;
+        }
+
+        isEditing = false;
+        errorMessage = null;
+        await OnEditRecording.InvokeAsync((Song.PieceId, trimmed.Length > 0 ? trimmed : null));
+    }
+
+    private Task ToggleFeaturedAsync() => OnToggleFeatured.InvokeAsync(Song.PieceId);
 }
