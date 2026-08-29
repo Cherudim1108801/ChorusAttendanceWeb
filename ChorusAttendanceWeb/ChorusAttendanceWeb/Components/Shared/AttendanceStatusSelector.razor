@@ -1,9 +1,9 @@
 @* 参加/不参加/未定 の3択セグメントボタン。 *@
 
 <div class="chorus-status-selector">
-    <button type="button" class="chorus-status-btn @(Status == AttendanceStatus.Attending ? "active-attending" : "")" @onclick="() => Change(AttendanceStatus.Attending)">参加</button>
-    <button type="button" class="chorus-status-btn @(Status == AttendanceStatus.NotAttending ? "active-not-attending" : "")" @onclick="() => Change(AttendanceStatus.NotAttending)">不参加</button>
-    <button type="button" class="chorus-status-btn @(Status == AttendanceStatus.Undecided ? "active-undecided" : "")" @onclick="() => Change(AttendanceStatus.Undecided)">未定</button>
+    <button type="button" disabled="@Disabled" class="chorus-status-btn @(Status == AttendanceStatus.Attending ? "active-attending" : "")" @onclick="() => Change(AttendanceStatus.Attending)">参加</button>
+    <button type="button" disabled="@Disabled" class="chorus-status-btn @(Status == AttendanceStatus.NotAttending ? "active-not-attending" : "")" @onclick="() => Change(AttendanceStatus.NotAttending)">不参加</button>
+    <button type="button" disabled="@Disabled" class="chorus-status-btn @(Status == AttendanceStatus.Undecided ? "active-undecided" : "")" @onclick="() => Change(AttendanceStatus.Undecided)">未定</button>
 </div>
 
 @code {
@@ -13,5 +13,9 @@
     [Parameter]
     public EventCallback<AttendanceStatus> StatusChanged { get; set; }
 
-    private Task Change(AttendanceStatus status) => StatusChanged.InvokeAsync(status);
+    /// <summary>true の場合、選択操作を無効化する（過去の練習など）。</summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    private Task Change(AttendanceStatus status) => Disabled ? Task.CompletedTask : StatusChanged.InvokeAsync(status);
 }

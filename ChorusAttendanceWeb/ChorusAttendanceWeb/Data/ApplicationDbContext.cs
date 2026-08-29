@@ -49,6 +49,7 @@ namespace ChorusAttendanceWeb.Data
             builder.Entity<PracticePiece>(b =>
             {
                 b.HasKey(pp => new { pp.PracticeId, pp.PieceId });
+                b.Property(pp => pp.RecordingUrl).HasMaxLength(500);
                 b.HasOne(pp => pp.Practice)
                     .WithMany(p => p.Pieces)
                     .HasForeignKey(pp => pp.PracticeId)
